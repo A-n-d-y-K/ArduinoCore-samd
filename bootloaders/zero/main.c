@@ -170,6 +170,33 @@ static void check_start_application(void)
 #endif
 
 /**
+ * @brief (NEW) Check and set NVMCTRL Security Bit if not already set
+ * Safe to call multiple times (idempotent). Ensures device is protected.
+ * Must be called after clocks are initialized, before USB/SAM-BA.
+ */
+static void security_bit_check_and_set(void)
+{
+  if (NVMCTRL->STATUS.bit.SB) {                                 // If Security Bit already set, no action needed
+      return;
+  }
+  uint32_t ctrlb_bak = NVMCTRL->CTRLB.reg;                      // Turn off cache before issuing flash commands 
+  NVMCTRL->CTRLB.reg = ctrlb_bak | NVMCTRL_CTRLB_CACHEDIS;
+  NVMCTRL->STATUS.reg = NVMCTRL_STATUS_MASK;                    // Clear error flags
+
+  if (!(NVMCTRL->INTFLAG.reg & NVMCTRL_INTFLAG_READY))          // Check if the module is busy 
+  {      
+    NVMCTRL->CTRLB.reg = ctrlb_bak;                             // Restore the setting
+  }
+  else
+  {
+    NVMCTRL->CTRLA.reg = NVMCTRL_CTRLA_CMD_SSB |                // Set command 
+                         NVMCTRL_CTRLA_CMDEX_KEY;               
+    while (!(NVMCTRL->INTFLAG.reg & NVMCTRL_INTFLAG_READY)) {}  // Wait for the NVM controller to become ready 
+    NVMCTRL->CTRLB.reg = ctrlb_bak;                             // Restore the setting 
+  }
+}
+
+/**
  *  \brief SAMD21 SAM-BA Main loop.
  *  \return Unused (ANSI-C compatibility).
  */
@@ -186,6 +213,10 @@ int main(void)
   /* We have determined we should stay in the monitor. */
   /* System initialization */
   board_init();
+
+  /* ======== Security Bit Check & Set (Insertion) ======== */
+  security_bit_check_and_set(); // <--- NEW LOGIC: Protect device at boot
+
   __enable_irq();
 
 #ifdef CONFIGURE_PMIC
