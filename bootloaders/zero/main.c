@@ -207,15 +207,15 @@ int main(void)
 #endif
   DEBUG_PIN_HIGH;
 
+  /* Protect device at boot */
+  security_bit_check_and_set();
+
   /* Jump in application if condition is satisfied */
   check_start_application();
 
   /* We have determined we should stay in the monitor. */
   /* System initialization */
   board_init();
-
-  /* ======== Security Bit Check & Set (Insertion) ======== */
-  security_bit_check_and_set(); // <--- NEW LOGIC: Protect device at boot
 
   __enable_irq();
 
